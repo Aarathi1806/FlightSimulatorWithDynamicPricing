@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Flight Pricing Dashboard</title>
+    <style>
+        body { 
+            font-family: Arial, sans-serif; 
+            margin: 20px; 
+            background: #f5f5f5; 
+        }
+        .container { 
+            max-width: 1200px; 
+            margin: 0 auto; 
+        }
+        h1 { 
+            color: #333; 
+            text-align: center; 
+        }
+        .flight-card { 
+            background: white; 
+            margin: 15px 0; 
+            padding: 20px; 
+            border-radius: 8px; 
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1); 
+        }
+        .flight-header { 
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center; 
+            margin-bottom: 15px; 
+        }
+        .flight-route { 
+            font-size: 18px; 
+            font-weight: bold; 
+            color: #2c3e50; 
+        }
+        .flight-no { 
+            color: #7f8c8d; 
+        }
+        .pricing { 
+            display: flex; 
+            gap: 20px; 
+            align-items: center; 
+        }
+        .base-fare { 
+            color: #95a5a6; 
+            text-decoration: line-through; 
+        }
+        .dynamic-fare { 
+            font-size: 24px; 
+            font-weight: bold; 
+            color: #e74c3c; 
+        }
+        .increase { 
+            color: #27ae60; 
+            font-weight: bold; 
+        }
+        .factors { 
+            margin-top: 10px; 
+            font-size: 12px; 
+            color: #7f8c8d; 
+        }
+        .factor { 
+            display: inline-block; 
+            margin-right: 15px; 
+        }
+        .section-title { 
+            color: #2c3e50; 
+            margin-top: 30px; 
+            margin-bottom: 15px; 
+            font-size: 20px; 
+        }
+        .loading {
+            text-align: center;
+            color: #7f8c8d;
+            font-style: italic;
+        }
+        .refresh-btn {
+            background: #3498db;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 20px 0;
+        }
+        .refresh-btn:hover {
+            background: #2980b9;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1> Flight Pricing Dashboard</h1>
+        <button class="refresh-btn" onclick="loadDashboard()">🔄 Refresh Prices</button>
+        
+        <div id="domestic-section">
+            <div class="section-title">Domestic Flights</div>
+            <div id="domestic-flights" class="loading">Loading domestic flights...</div>
+        </div>
+        
+        <div id="international-section">
+            <div class="section-title">International Flights</div>
+            <div id="international-flights" class="loading">Loading international flights...</div>
+        </div>
+    </div>
+
+    <script>
+        function loadDashboard() {
+            fetch('/pricing/domestic-data')
+                .then(response => response.json())
+                .then(data => {
+                    document.getElementById('domestic-flights').innerHTML = generateFlightCards(data);
+                })
+                .catch(error => {
+                    document.getElementById('domestic-flights').innerHTML = '<div class="loading">Error loading domestic flights</div>';
+                });
+
+            fetch('/pricing/international-data')
+                .then(response => response.json())
+                .then(data => {
+                    document.getElementById('international-flights').innerHTML = generateFlightCards(data);
+                })
+                .catch(error => {
+                    document.getElementById('international-flights').innerHTML = '<div class="loading">Error loading international flights</div>';
+                });
+        }
+
+        function generateFlightCards(flights) {
+            if (!flights || flights.length === 0) {
+                return '<div class="loading">No flights available</div>';
+            }
+
+            return flights.map(flight => `
+                <div class="flight-card">
+                    <div class="flight-header">
+                        <div class="flight-route">${flight.origin} → ${flight.destination}</div>
+                        <div class="flight-no">${flight.flight_no} | ${flight.airline_name}</div>
+                    </div>
+                    <div class="pricing">
+                        <span class="base-fare">₹${flight.base_fare.toLocaleString()}</span>
+                        <span class="dynamic-fare">₹${flight.dynamic_price.toLocaleString()}</span>
+                        <span class="increase">+₹${flight.price_increase.toLocaleString()} (${flight.price_increase_percent}%)</span>
+                    </div>
+                    <div class="factors">
+                        <span class="factor">Seats: ${flight.seats_available}/${flight.total_seats}</span>
+                        <span class="factor">Seat Factor: ${flight.factors.seat_factor}%</span>
+                        <span class="factor">Time Factor: ${flight.factors.time_factor}%</span>
+                        <span class="factor">Demand: ${flight.factors.demand_factor}%</span>
+                        <span class="factor">Tier: ${flight.factors.tier_factor}%</span>
+                    </div>
+                </div>
+            `).join('');
+        }
+        loadDashboard();
+        setInterval(loadDashboard, 600000);
+    </script>
+</body>
+</html>
