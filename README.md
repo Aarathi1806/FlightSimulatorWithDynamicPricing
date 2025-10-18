@@ -9,8 +9,6 @@ flight-simulator/
 ├── models/
 │   ├── queries.py
 │   ├── pricing_engine.py
-|--- utils/
-│   ── demand_simulator.py
 ├── templates/
 │   └── pricing_dashboard.html
 ├── .gitignore
