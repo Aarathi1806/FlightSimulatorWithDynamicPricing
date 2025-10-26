@@ -7,24 +7,6 @@ The booking workflow implements a complete end-to-end booking process with:
 - **Dynamic Pricing**: Integrated with pricing engine
 - **Cancellation**: Full refund and seat release
 
----
-
-### 1. Update Bookings Table Schema
-
-Run this SQL command in your MySQL database:
-
-```sql
-USE flight_simulator;
-
-ALTER TABLE bookings 
-ADD COLUMN pnr_code VARCHAR(10) UNIQUE AFTER booking_id,
-ADD COLUMN booking_amount DECIMAL(10,2) AFTER pnr_code;
-
-CREATE INDEX idx_pnr_code ON bookings(pnr_code);
-```
-
----
-
 ## 🚀 API Endpoints
 
 ### 1. Create Booking
