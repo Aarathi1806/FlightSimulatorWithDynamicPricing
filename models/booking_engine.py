@@ -4,12 +4,11 @@ from datetime import datetime, timedelta
 from database.db_config import get_connection
 
 def generate_pnr():
-    """Generate a unique 6-character PNR code"""
-    # Format: A1B2C3 (alternating letters and numbers)
+    """Generate a unique 6-character PNR code (4 letters + 2 numbers)"""
     letters = string.ascii_uppercase
     numbers = string.digits
-    
-    pnr = ''.join([random.choice(letters if i % 2 == 0 else numbers) for i in range(6)])
+
+    pnr = ''.join(random.choice(letters) for _ in range(4)) + ''.join(random.choice(numbers) for _ in range(2))
     return pnr
 
 def check_seat_availability(flight_type, flight_id, seat_no):
