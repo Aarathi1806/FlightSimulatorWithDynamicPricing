@@ -1,0 +1,96 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="card">
+  <h2>Search Flights</h2>
+  <div class="row cols-3" style="margin-top:10px">
+    <div>
+      <label class="label">Origin</label>
+      <input class="input" id="origin" placeholder="e.g. Delhi" />
+    </div>
+    <div>
+      <label class="label">Destination</label>
+      <input class="input" id="destination" placeholder="e.g. Mumbai" />
+    </div>
+    <div>
+      <label class="label">Date</label>
+      <input class="input" id="date" type="date" />
+    </div>
+  </div>
+  <div class="row cols-3" style="margin-top:8px">
+    <div>
+      <label class="label">Sort By</label>
+      <select class="input" id="sort">
+        <option value="price">Price</option>
+        <option value="duration">Duration</option>
+      </select>
+    </div>
+    <div>
+      <label class="label">Order</label>
+      <select class="input" id="order">
+        <option value="asc">Ascending</option>
+        <option value="desc">Descending</option>
+      </select>
+    </div>
+    <div style="align-self:end">
+      <button class="button" id="searchBtn">Search</button>
+    </div>
+  </div>
+</div>
+
+<div class="card" style="margin-top:14px">
+  <h3>Results</h3>
+  <div id="results"></div>
+</div>
+
+<script>
+async function searchFlights() {
+  const origin = document.getElementById('origin').value.trim();
+  const destination = document.getElementById('destination').value.trim();
+  const date = document.getElementById('date').value;
+  const sort = document.getElementById('sort').value;
+  const order = document.getElementById('order').value;
+
+  const params = new URLSearchParams();
+  if (origin) params.append('origin', origin);
+  if (destination) params.append('destination', destination);
+  if (date) params.append('date', date);
+  params.append('sort', sort);
+  params.append('order', order);
+  params.append('pricing', 'true');
+
+  const res = await fetch('/flights/search?' + params.toString());
+  const data = await res.json();
+
+  const makeRow = (f, type) => {
+    const total = f.total_seats || 1;
+    const avail = f.seats_available || 0;
+    const booked = total - avail;
+    const pctAvail = (avail / total) * 100;
+    const pctBooked = (booked / total) * 100;
+    let status = 'available', statusText = 'Available';
+    if (pctAvail < 20) { status = 'filled'; statusText = 'Filled'; }
+    else if (pctBooked > 50) { status = 'popular'; statusText = 'Popular'; }
+    return `
+    <div class="flight-item">
+      <div>
+        <div><strong>${f.flight_no}</strong> • ${f.airline_name} • ${type} <span class="flight-status ${status}">${statusText}</span></div>
+        <div class="flight-meta">${f.origin} → ${f.destination} • Dep: ${new Date(f.departure).toLocaleString()}</div>
+      </div>
+      <div class="flight-right">
+        <div><strong>₹${(f.dynamic_price ?? f.base_fare).toLocaleString()}</strong></div>
+        <div class="flight-meta">Seats: ${f.seats_available}/${f.total_seats}</div>
+        <div>
+          <a class="button small" href="/ui/booking/${type}/${type==='DOMESTIC'? f.flight_id : f.intl_id}">Book</a>
+        </div>
+      </div>
+    </div>`;
+  };
+
+  const dom = (data.domestic_flights || []).map(f => makeRow(f, 'DOMESTIC')).join('');
+  const intl = (data.international_flights || []).map(f => makeRow(f, 'INTERNATIONAL')).join('');
+  document.getElementById('results').innerHTML = dom + intl || '<div class="flight-meta">No flights found.</div>';
+}
+
+document.getElementById('searchBtn').addEventListener('click', searchFlights);
+</script>
+{% endblock %}

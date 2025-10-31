@@ -1,0 +1,72 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="card">
+  <h2>My Bookings</h2>
+  <div class="row cols-2" style="margin-top:10px">
+    <div>
+      <label class="label">Search by PNR</label>
+      <div class="row cols-2">
+        <input class="input" id="pnr" placeholder="e.g. A1B2C3" />
+        <button class="button" onclick="lookupPNR()">Find</button>
+      </div>
+    </div>
+    <div>
+      <label class="label">Search by Passenger ID</label>
+      <div class="row cols-2">
+        <input class="input" id="passenger_id" placeholder="e.g. 7" />
+        <button class="button" onclick="lookupPassenger()">Find</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="card" style="margin-top:14px">
+  <h3>Results</h3>
+  <div id="out" class="flight-meta">Enter a PNR or Passenger ID to view your bookings.</div>
+</div>
+
+<script>
+async function lookupPNR() {
+  const pnr = document.getElementById('pnr').value.trim();
+  if (!pnr) return;
+  const res = await fetch(`/bookings/pnr/${encodeURIComponent(pnr)}`);
+  const out = document.getElementById('out');
+  if (!res.ok) { out.textContent = 'No booking found for that PNR.'; return; }
+  const data = await res.json();
+  const b = data.booking || {};
+  out.innerHTML = renderBooking(b);
+}
+
+async function lookupPassenger() {
+  const pid = document.getElementById('passenger_id').value.trim();
+  if (!pid) return;
+  const res = await fetch(`/bookings/passenger/${encodeURIComponent(pid)}`);
+  const out = document.getElementById('out');
+  if (!res.ok) { out.textContent = 'No bookings found for that passenger.'; return; }
+  const data = await res.json();
+  const list = (data.bookings || []).map(renderBooking).join('');
+  out.innerHTML = list || 'No bookings.';
+}
+
+function renderBooking(b) {
+  return `
+  <div class="flight-item">
+    <div>
+      <div><strong>Booking #${b.booking_id || ''}</strong> • PNR ${b.pnr_code || '-'} • ${b.flight_type || ''}</div>
+      <div class="flight-meta">Seat: ${b.seat_no || '-'} • Status: ${b.status || '-'} • Amount: ₹${(b.booking_amount || b.amount || 0)}</div>
+    </div>
+    <div>
+      <div class="flight-meta" style="text-align:right">Passenger: ${b.full_name || ''}</div>
+      ${b.status==='CONFIRMED'? `<div style="text-align:right; margin-top:6px"><button class='button secondary' onclick='cancel(${b.booking_id})'>Cancel</button></div>`: ''}
+    </div>
+  </div>`
+}
+
+async function cancel(id) {
+  const ok = confirm('Cancel this booking?');
+  if (!ok) return;
+  const res = await fetch(`/bookings/${id}/cancel`, { method: 'POST' });
+  if (res.ok) alert('Booking cancelled'); else alert('Cancellation failed');
+}
+</script>
+{% endblock %}

@@ -1,0 +1,220 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="row cols-2">
+  <div class="card">
+    <h2>Booking • {{ flight_type }} • Flight {{ flight.flight_no }}</h2>
+    <div class="flight-meta">{{ flight.origin }} → {{ flight.destination }} • Departs {{ flight.departure }}</div>
+    <div class="aircraft" style="margin-top:12px">
+      <div class="aircraft-illustration">
+        <div class="plane-outline">
+          <div class="window-row">
+            <span class="window"></span><span class="window"></span>
+            <span class="window"></span><span class="window"></span>
+            <span class="window"></span><span class="window"></span>
+          </div>
+          <div class="window-row">
+            <span class="window"></span><span class="window"></span>
+            <span class="window"></span><span class="window"></span>
+            <span class="window"></span><span class="window"></span>
+          </div>
+        </div>
+      </div>
+      <div class="seatmap">
+        <div class="seat-grid" id="seatGrid"></div>
+        <div class="seat-legend">
+          <span><span class="dot" style="background:#e8f0ff;border:1px solid #c9d7ee"></span>Free</span>
+          <span><span class="dot" style="background:#c9d2e3"></span>Booked</span>
+          <span><span class="dot" style="background:#2f6fec"></span>Selected</span>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="card">
+    <h3>Passengers & Payment</h3>
+    <div id="alert" class="flight-meta" style="color:#b91c1c"></div>
+    <div class="row cols-2">
+      <div>
+        <label class="label">Seat</label>
+        <input class="input" id="seat_no" placeholder="Click a seat or type e.g. A01" />
+      </div>
+      <div>
+        <label class="label">Full Name</label>
+        <input class="input" id="full_name" placeholder="John Doe" />
+      </div>
+      <div>
+        <label class="label">Email</label>
+        <input class="input" id="email" placeholder="john@example.com" />
+      </div>
+      <div>
+        <label class="label">Contact</label>
+        <input class="input" id="contact_no" placeholder="9876543210" />
+      </div>
+      <div>
+        <label class="label">Nationality</label>
+        <input class="input" id="nationality" placeholder="Indian" value="Indian" />
+      </div>
+      <div>
+        <label class="label">Visa Status (Intl)</label>
+        <select class="input" id="visa_status">
+          <option value="">-</option>
+          <option>Approved</option>
+          <option>Valid</option>
+          <option>N/A</option>
+        </select>
+      </div>
+    </div>
+    <div class="row cols-2" style="margin-top:8px">
+      <button class="button secondary" id="addPassengerBtn">Add Passenger</button>
+      <div></div>
+    </div>
+    <div style="margin-top:10px">
+      <h4 style="margin:0 0 8px 0">Passengers</h4>
+      <div id="passengerList" class="flight-meta">No passengers added yet.</div>
+    </div>
+    <div style="margin-top:12px">
+      <label class="label">Payment Mode</label>
+      <select class="input" id="payment_mode">
+        <option>Credit Card</option>
+        <option>UPI</option>
+        <option>Net Banking</option>
+      </select>
+    </div>
+    <div style="margin-top:12px">
+      <button class="button" id="confirmBtn" disabled>Confirm Booking</button>
+      <div id="status" class="flight-meta" style="margin-top:8px"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const seatsTotal = {{ flight.total_seats or 0 }};
+const seatsAvailable = {{ flight.seats_available or 0 }};
+const cols = 6;
+const labels = ['A','B','C','D','E','F'];
+const booked = new Set({{ booked_seats | tojson }});
+const selected = new Set();
+let passengers = [];
+
+function buildSeats() {
+  const grid = document.getElementById('seatGrid');
+  grid.innerHTML = '';
+  const rows = Math.ceil(seatsTotal / cols) || 0;
+  let placed = 0;
+  for (let r = 1; r <= rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      if (placed >= seatsTotal) break;
+      const id = labels[c] + String(r).padStart(2,'0');
+      const div = document.createElement('div');
+      const isBooked = booked.has(id);
+      const isSelected = selected.has(id);
+      div.className = 'seat' + (isBooked? ' booked': '') + (isSelected? ' selected': '');
+      div.textContent = id;
+      if (!isBooked) {
+        div.onclick = () => { selectSeat(div, id); };
+      }
+      grid.appendChild(div);
+      placed++;
+    }
+  }
+}
+
+function showAlert(msg) { document.getElementById('alert').textContent = msg || ''; }
+
+function selectSeat(el, id) {
+  if (booked.has(id)) return;
+  if (selected.has(id)) {
+    selected.delete(id);
+  } else {
+    selected.add(id);
+    document.getElementById('seat_no').value = id;
+  }
+  buildSeats();
+  updateConfirmState();
+}
+
+function validEmail(v) { return /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v); }
+
+function renderPassengers() {
+  const out = document.getElementById('passengerList');
+  if (!passengers.length) { out.textContent = 'No passengers added yet.'; return; }
+  out.innerHTML = passengers.map((p, i) => `
+    <div class="flight-item">
+      <div>
+        <div><strong>${p.full_name}</strong> • ${p.email}</div>
+        <div class="flight-meta">Seat: ${p.seat_no} • ${p.nationality}${p.visa_status? ' • Visa: '+p.visa_status: ''}</div>
+      </div>
+      <div class="flight-right">
+        <button class="button secondary" onclick="removePassenger(${i})">Remove</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+function removePassenger(i) {
+  const seat = passengers[i].seat_no;
+  passengers.splice(i, 1);
+  if (selected.has(seat)) selected.delete(seat);
+  buildSeats();
+  renderPassengers();
+  updateConfirmState();
+}
+
+function addPassenger() {
+  const seat_no = document.getElementById('seat_no').value.trim().toUpperCase();
+  const full_name = document.getElementById('full_name').value.trim();
+  const email = document.getElementById('email').value.trim();
+  const contact_no = document.getElementById('contact_no').value.trim();
+  const nationality = document.getElementById('nationality').value.trim() || 'Indian';
+  const visa_status = document.getElementById('visa_status').value;
+
+  if (!seat_no) return showAlert('Choose a seat.');
+  if (booked.has(seat_no)) return showAlert('Seat already booked.');
+  if (passengers.find(p => p.seat_no === seat_no)) return showAlert('Seat already added.');
+  if (!full_name) return showAlert('Full name is required.');
+  if (!validEmail(email)) return showAlert('Enter a valid email.');
+  if (!/^\d{10}$/.test(contact_no)) return showAlert('Enter 10-digit contact number.');
+
+  passengers.push({ seat_no, full_name, email, contact_no, nationality, visa_status });
+  selected.add(seat_no);
+  document.getElementById('seat_no').value = '';
+  document.getElementById('full_name').value = '';
+  document.getElementById('email').value = '';
+  document.getElementById('contact_no').value = '';
+  document.getElementById('visa_status').value = '';
+  showAlert('');
+  buildSeats();
+  renderPassengers();
+  updateConfirmState();
+}
+
+function updateConfirmState() {
+  document.getElementById('confirmBtn').disabled = passengers.length === 0;
+}
+
+async function confirmBooking() {
+  if (!passengers.length) return showAlert('Add at least one passenger.');
+  const payload = {
+    flight_type: '{{ flight_type }}',
+    flight_id: {{ flight_id }},
+    passengers,
+    payment_info: { payment_mode: document.getElementById('payment_mode').value }
+  };
+  const res = await fetch('/bookings/create', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)});
+  const data = await res.json();
+  const out = document.getElementById('status');
+  if (res.ok) {
+    out.textContent = `✅ Booking confirmed for ${passengers.length} passenger(s). PNR: ${data.pnr}`;
+  } else {
+    out.textContent = `❌ ${data.error || 'Booking failed'}`;
+  }
+}
+
+document.getElementById('addPassengerBtn').addEventListener('click', addPassenger);
+
+document.getElementById('confirmBtn').addEventListener('click', confirmBooking);
+
+buildSeats();
+renderPassengers();
+updateConfirmState();
+</script>
+{% endblock %}

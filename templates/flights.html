@@ -1,0 +1,40 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="card">
+  <h2>Browse Flights</h2>
+  <div id="list" style="margin-top:10px"></div>
+</div>
+<script>
+(async function load(){
+  const res = await fetch('/flights/all');
+  const data = await res.json();
+  const render = (f, type) => {
+    const total = f.total_seats || 1;
+    const avail = f.seats_available || 0;
+    const booked = total - avail;
+    const pctAvail = (avail / total) * 100;
+    const pctBooked = (booked / total) * 100;
+    let status = 'available', statusText = 'Available';
+    if (pctAvail < 20) { status = 'filled'; statusText = 'Filled'; }
+    else if (pctBooked > 50) { status = 'popular'; statusText = 'Popular'; }
+    return `
+    <div class="flight-item">
+      <div>
+        <div><strong>${f.flight_no}</strong> • ${type} <span class="flight-status ${status}">${statusText}</span></div>
+        <div class="flight-meta">${f.origin} → ${f.destination} • Dep: ${new Date(f.departure).toLocaleString()}</div>
+      </div>
+      <div class="flight-right">
+        <div><strong>₹${Number((f.dynamic_price ?? f.base_fare)).toLocaleString()}</strong></div>
+        <div class="flight-meta">Seats: ${f.seats_available}/${f.total_seats}</div>
+        <div>
+          <a class="button small" href="/ui/booking/${type}/${type==='DOMESTIC'? f.flight_id : f.intl_id}">Book</a>
+        </div>
+      </div>
+    </div>`;
+  };
+  const dom = (data.domestic_flights||[]).map(f => render(f, 'DOMESTIC')).join('');
+  const intl = (data.international_flights||[]).map(f => render(f, 'INTERNATIONAL')).join('');
+  document.getElementById('list').innerHTML = dom + intl || '<div class="flight-meta">No flights available.</div>';
+})();
+</script>
+{% endblock %}

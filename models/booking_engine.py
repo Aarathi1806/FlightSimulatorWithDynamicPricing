@@ -129,9 +129,73 @@ def simulate_payment(amount, payment_mode):
             "payment_time": datetime.now().isoformat()
         }
 
+def check_visa_requirement(flight_type, flight_id, passenger_info):
+    """Check visa requirements for international flights using schema (visa_verified Y/N)."""
+    try:
+        if flight_type.upper() != 'INTERNATIONAL':
+            return True, "No visa check required for domestic flights"
+        
+        conn = get_connection()
+        if not conn:
+            return False, "Database connection failed"
+        
+        cursor = conn.cursor(dictionary=True)
+        
+        # Get flight and whether visa required
+        cursor.execute("SELECT destination, requires_visa FROM international_flights WHERE intl_id = %s", (flight_id,))
+        flight = cursor.fetchone()
+        
+        if not flight:
+            cursor.close()
+            conn.close()
+            return False, "Flight not found"
+        
+        destination = flight['destination']
+        requires_visa = (str(flight.get('requires_visa') or 'Y').upper() == 'Y')
+        nationality = passenger_info.get('nationality', 'Indian')
+        visa_status = passenger_info.get('visa_status', 'N/A')
+        
+        # If flight does not require visa, allow
+        if not requires_visa:
+            cursor.close(); conn.close()
+            return True, "Visa not required for this route"
+
+        # Accept provided status when explicitly valid/approved
+        if visa_status.upper() in ['VALID', 'APPROVED', 'YES']:
+            cursor.close()
+            conn.close()
+            return True, "Visa verified"
+        
+        # Check if there's an approved visa check record for this passenger (visa_verified = 'Y')
+        if 'email' in passenger_info:
+            cursor.execute("""
+                SELECT vc.visa_verified 
+                FROM visa_checks vc
+                JOIN passengers p ON vc.passenger_id = p.passenger_id
+                WHERE p.email = %s AND vc.visa_verified = 'Y'
+            """, (passenger_info['email'],))
+            
+            visa_check = cursor.fetchone()
+            cursor.close()
+            conn.close()
+            
+            if visa_check:
+                return True, "Visa verified from previous check"
+        
+        # Enforce visa requirement if not validated
+        if visa_status.upper() in ['N/A', 'NA', '', None]:
+            return False, f"Visa required for {destination}. Provide visa_status or ensure verification record exists."
+        
+        cursor.close()
+        conn.close()
+        return False, f"Visa verification required for {destination}. Current status: {visa_status}"
+        
+    except Exception as e:
+        return False, f"Error checking visa: {str(e)}"
+
 def validate_booking_data(data):
-    """Validate booking request data"""
-    required_fields = ['flight_type', 'flight_id', 'seat_no', 'passenger_info', 'payment_info']
+    """Validate booking request data - supports single or multiple passengers"""
+    required_fields = ['flight_type', 'flight_id', 'payment_info']
     
     for field in required_fields:
         if field not in data:
@@ -140,8 +204,21 @@ def validate_booking_data(data):
     if data['flight_type'] not in ['DOMESTIC', 'INTERNATIONAL']:
         return False, "Invalid flight_type. Must be DOMESTIC or INTERNATIONAL"
     
-    if 'email' not in data['passenger_info'] or 'full_name' not in data['passenger_info']:
-        return False, "Missing required passenger information"
+    # Support both single passenger (backward compatible) and multiple passengers
+    if 'passenger_info' in data and 'seat_no' in data:
+        # Single passenger format (backward compatible)
+        if 'email' not in data['passenger_info'] or 'full_name' not in data['passenger_info']:
+            return False, "Missing required passenger information"
+    elif 'passengers' in data:
+        # Multiple passengers format
+        if not isinstance(data['passengers'], list) or len(data['passengers']) < 1:
+            return False, "At least one passenger is required"
+        
+        for idx, p in enumerate(data['passengers']):
+            if 'email' not in p or 'full_name' not in p or 'seat_no' not in p:
+                return False, f"Missing required information for passenger {idx + 1}"
+    else:
+        return False, "Missing passenger information. Use 'passenger_info' + 'seat_no' or 'passengers' array"
     
     if 'payment_mode' not in data['payment_info']:
         return False, "Missing payment mode"
